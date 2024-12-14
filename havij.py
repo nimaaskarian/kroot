@@ -1,36 +1,26 @@
-
-
 def main():
     from argparse import ArgumentParser, FileType
-    parser = ArgumentParser(prog='havij', description='a script for you to gather data about food you eat')
+    parser = ArgumentParser(prog='dietor', description='a script for you to gather data about food you eat')
     parser.add_argument('--search', type=str)
-    parser.add_argument('--foodsfile', type=FileType("r+"), default="/home/nima/.config/havij/foods.csv")
+    parser.add_argument('--foodsfile', type=FileType("a"), default="/home/nima/.config/havij")
     args = parser.parse_args()
     if query:=args.search:
-        from selenium.webdriver.chrome.service import Service
         from selenium.webdriver import ChromeOptions, Chrome
         from more_itertools import take
         import csv
         global driver
         options = ChromeOptions()
-        service = Service("/sbin/chromedriver")
         options.add_argument("--headless=new")
-        driver = Chrome(options=options, service=service)
+        driver = Chrome(options=options)
         keys = [ "Energy", "Protein", "Carbohydrate", "Sugar" ]
         units = {
                 "Energy": "kcal"
                 }
         if url := prompt_url_fzf(query):
-            writer = csv.writer(args.foodsfile)
-            csv_dict_reader = csv.DictReader(args.foodsfile)
-            row = {key: value for key, value, _ in take(len(keys), get_keys(keys, url, units))}
-            for key in keys:
-                row[key] = row.get(key,0)
-            writer = csv.DictWriter(args.foodsfile, keys)
-            if not any(csv_dict_reader):
-                writer.writeheader()
-            writer.writerow(row)
-            args.foodsfile.close()
+            with open()
+            writer = csv.writer()
+            writer
+            print(list(take(len(keys), get_keys(keys, url, units))))
 
     pass
 
@@ -50,8 +40,8 @@ def get_keys(keys, url, units={}):
             unit_ok = units[name] == unit
         except KeyError:
             unit_ok = True
-        if unit_ok and (key:=next((key for key in keys if key in name), None)) is not None:
-            yield key, float(value), unit
+        if unit_ok and any(key in name for key in keys):
+            yield name, value, unit
 
 def prompt_url_fzf(query):
     import subprocess
