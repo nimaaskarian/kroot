@@ -20,19 +20,21 @@ def main():
         units = {
                 "Energy": "kcal"
                 }
-        if url := prompt_url_fzf(query):
+        if (name_url := prompt_url_fzf(query)):
+            name, url = name_url
             writer = csv.writer(args.foodsfile)
             csv_dict_reader = csv.DictReader(args.foodsfile)
             row = {key: value for key, value, _ in take(len(keys), get_keys(keys, url, units))}
+            keys.insert(0, "Name")
+            row["Name"] = name
             for key in keys:
-                row[key] = row.get(key,0)
+                if not (item:=row.get(key,0)):
+                    row[key] = item
             writer = csv.DictWriter(args.foodsfile, keys)
             if not any(csv_dict_reader):
                 writer.writeheader()
             writer.writerow(row)
             args.foodsfile.close()
-
-    pass
 
 def get_keys(keys, url, units={}):
     from selenium.webdriver.support import expected_conditions as EC
@@ -69,7 +71,7 @@ def prompt_url_fzf(query):
         for i, (name, url, category) in enumerate(search(query)):
             process.stdin.write(f"{i}. \"{name}\" in \"{category}\"\n")
             process.stdin.flush()
-            urls.append(url)
+            urls.append((name,url))
         process.stdin.close()
     except BrokenPipeError:
         pass
