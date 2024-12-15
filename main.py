@@ -1,3 +1,5 @@
+
+
 def main():
     from argparse import ArgumentParser, FileType
     parser = ArgumentParser(prog='havij', description='a script for you to gather data about food you eat')
@@ -48,7 +50,7 @@ def search_food_write_csv(query, foodsfile):
         foodsfile.close()
 
 def select_portion_fzf(portions, select):
-    if i:=iterator_fzf_select(portions):
+    if i:=iterator_fzf_select(portions, fzf_process()):
         select.select_by_visible_text(portions[i])
         return portions[i]
     return portions[0]
@@ -92,7 +94,7 @@ def prompt_url_fzf(query):
     for type in ("Foundation","SR Legacy"):
         process = fzf_process()
         try:
-            if i:=iterator_fzf_select(search(query, type), callback, to_str, process):
+            if i:=iterator_fzf_select(search(query, type), process, callback, to_str):
                 return name_urls[i]
         except TimeoutException:
             process.kill()
@@ -110,7 +112,7 @@ def fzf_process(args=[]):
             text=True
         )
 
-def iterator_fzf_select(iterator, callback=None, to_str=lambda i, item: f"{i}. {item}\n",process=fzf_process()):
+def iterator_fzf_select(iterator,process, callback=None, to_str=lambda i, item: f"{i}. {item}\n"):
     if process.stdin is None or process.stdout is None:
         return
     try:
