@@ -6,6 +6,29 @@ def main(args):
             search_food_write_csv(query, foodsfile)
         if args.add:
             add_from_foods_to_today_file(foodsfile)
+        if food_name:=args.compose:
+            import csv
+            rows = list(csv.DictReader(foodsfile))
+            to_str = lambda i, item: f"{i}. {item['Name']} ({item['Portion']})\n"
+            if indices:=iterator_fzf_select(rows, fzf_process(['--multi']), to_str=to_str):
+                def is_ok(key):
+                    try:
+                        float(rows[0][key])
+                        return True
+                    except ValueError:
+                        return False
+                amount_per_portion = {i: get_amount_from_stdin(rows[i], prompt=f"How much {rows[i]['Name']} ({rows[i]['Portion']}) is used per portion?\n> ")
+                                      for i in indices}
+                item = {key: sum(float(rows[i][key])*amount_per_portion[i]
+                                 for i in indices)
+                        for key in rows[0].keys()
+                        if is_ok(key)}
+                item["Portion"] = input("What's the portion for this food?\n> ")
+                item["Name"] = food_name
+                writer = csv.DictWriter(foodsfile, rows[0].keys())
+                writer.writerow(item)
+                logger.info(f"wrote \"{food_name}\" to csv file successfully.")
+
 
 def add_from_foods_to_today_file(foodsfile):
     import csv
@@ -21,16 +44,21 @@ def add_from_foods_to_today_file(foodsfile):
             for i in indices:
                 item = rows[i]
                 item["Time"] = time.strftime("%T")
-                print(f"How much of \"{item['Name']} ({item['Portion']})\" you consumed (float)?", end="\n> ")
-                while True:
-                    try:
-                        amount = float(input())
-                        break
-                    except ValueError:
-                        print(end="> ")
-                item["Amount"] = amount
+                item["Amount"] = get_amount_from_stdin(item)
                 writer.writerow(item)
                 logger.info(f"wrote to file {path}")
+
+
+def get_amount_from_stdin(item, prompt = None ):
+    if prompt is None:
+        prompot = f"How much of \"{item['Name']} ({item['Portion']})\" you consumed (float)?"
+    print(prompt, end="\n> ")
+    while True:
+        try:
+            return float(input())
+        except ValueError:
+            print(end="> ")
+
 
 def search_food_write_csv(query, foodsfile):
     from selenium.webdriver.chrome.service import Service
@@ -211,6 +239,6 @@ if __name__ == "__main__":
     parser.add_argument('--add', help="interactively add nom nom-ed food", action="store_true")
     parser.add_argument('--foodsfile', type=FileType("r+"), default=str(Path.home().joinpath(".config/kroot/foods.csv")))
     parser.add_argument('--atedir', type=Path, default=Path.home().joinpath(".config/kroot/ate/"))
-    parser.add_argument('--compose', help="are you beethoven? cuz your composed food's so delicious.", action="store_true")
+    parser.add_argument('--compose', help="are you beethoven? cuz your composed food's so delicious.")
     args = parser.parse_args()
     main(args)
