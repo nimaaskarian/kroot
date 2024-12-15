@@ -25,9 +25,7 @@ def main(args):
                             except ValueError:
                                 print(end="> ")
                         item["Amount"] = amount
-                        print(item)
                         writer.writerow(item)
-                print()
 
 def search_food_write_csv(query, foodsfile):
     from selenium.webdriver.chrome.service import Service
