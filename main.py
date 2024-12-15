@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+
+
 def main(args):
     with args.foodsfile as file:
         if query:=args.search:
@@ -157,26 +159,41 @@ def search(query, type):
     from selenium.webdriver.common.by import By
     from selenium.webdriver import ActionChains
     from selenium.common.exceptions import StaleElementReferenceException
+    import time
     driver.get(f"https://fdc.nal.usda.gov/food-search?type={type}&query={query}")
     selector = By.CSS_SELECTOR, "app-food-search>div>div>div>div>table>tbody>tr"
     WebDriverWait(driver, 2).until(EC.presence_of_element_located(selector))
-    elements = driver.find_elements(*selector)
-    i = 0
-    while i < len(elements):
-        element = elements[i]
-        ActionChains(driver).scroll_to_element(element).perform()
-        try:
+    elements = None
+    count = 0
+
+    while count < 50:
+        new_elements = driver.find_elements(*selector)
+        if elements is None:
+            elements = new_elements
+        else:
+            if elements == new_elements:
+                count+=1
+                time.sleep(0.1)
+                continue
+            else:
+                elements = new_elements
+                count = 50
+        i = 0
+        while i < len(elements):
+            element = elements[i]
+            ActionChains(driver).scroll_to_element(element).perform()
             try:
-                _, url_name, _, category, *_ = element.find_elements(By.XPATH,".//td")
-                url = url_name.find_element(By.CSS_SELECTOR,"a").get_attribute("href")
-                yield url_name.text, url, category.text
-            except ValueError:
-                _, url_name, category, *_ = element.find_elements(By.XPATH,".//td")
-                url = url_name.find_element(By.CSS_SELECTOR,"a").get_attribute("href")
-                yield url_name.text, url, category.text
-            i+=1
-        except StaleElementReferenceException:
-            elements = driver.find_elements(*selector)
+                try:
+                    _, url_name, _, category, *_ = element.find_elements(By.XPATH,".//td")
+                    url = url_name.find_element(By.CSS_SELECTOR,"a").get_attribute("href")
+                    yield url_name.text, url, category.text
+                except ValueError:
+                    _, url_name, category, *_ = element.find_elements(By.XPATH,".//td")
+                    url = url_name.find_element(By.CSS_SELECTOR,"a").get_attribute("href")
+                    yield url_name.text, url, category.text
+                i+=1
+            except StaleElementReferenceException:
+                elements = driver.find_elements(*selector)
 
 if __name__ == "__main__":
     from argparse import ArgumentParser, FileType
