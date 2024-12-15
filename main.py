@@ -264,10 +264,11 @@ if __name__ == "__main__":
     import logging
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger("kroot")
+    from sys import argv
 
     parser = ArgumentParser(prog='kroot', description='(pronounced carrot) a script for you to gather data about food you eat')
     parser.add_argument('--search', type=str, help="search food in the USDA's database")
-    parser.add_argument('--add', help="interactively add nom nom-ed food", action="store_true", default=True)
+    parser.add_argument('--add', help="interactively add nom nom-ed food", action="store_true",default=len(argv) == 1)
     parser.add_argument('--foodsfile', type=FileType("r+"), default=str(Path.home().joinpath(".config/kroot/foods.csv")))
     parser.add_argument('--atedir', type=Path, default=Path.home().joinpath(".config/kroot/ate/"))
     parser.add_argument('--compose', help="are you beethoven? cuz your composed food's so delicious.")
