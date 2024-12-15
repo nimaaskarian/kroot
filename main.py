@@ -2,7 +2,7 @@
 
 def main():
     from argparse import ArgumentParser, FileType
-    parser = ArgumentParser(prog='havij', description='a script for you to gather data about food you eat')
+    parser = ArgumentParser(prog='kroot', description='(pronounced carrot) a script for you to gather data about food you eat')
     parser.add_argument('--search', type=str)
     parser.add_argument('--foodsfile', type=FileType("r+"), default="/home/nima/.config/havij/foods.csv")
     args = parser.parse_args()
