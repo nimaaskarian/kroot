@@ -28,6 +28,7 @@ def main(args):
                                 print(end="> ")
                         item["Amount"] = amount
                         writer.writerow(item)
+                        logger.info(f"wrote to file {path}")
 
 def search_food_write_csv(query, foodsfile):
     from selenium.webdriver.chrome.service import Service
