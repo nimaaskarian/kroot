@@ -4,30 +4,38 @@ def main(args):
     with args.foodsfile as foodsfile:
         if query:=args.search:
             search_food_write_csv(query, foodsfile)
-        if args.add:
-            add_from_foods_to_today_file(foodsfile)
-        if food_name:=args.compose:
-            import csv
-            rows = list(csv.DictReader(foodsfile))
-            to_str = lambda i, item: f"{i}. {item['Name']} ({item['Portion']})\n"
-            if indices:=iterator_fzf_select(rows, fzf_process(['--multi']), to_str=to_str):
-                def is_ok(key):
-                    try:
-                        float(rows[0][key])
-                        return True
-                    except ValueError:
-                        return False
-                amount_per_portion = {i: get_amount_from_stdin(rows[i], prompt=f"How much {rows[i]['Name']} ({rows[i]['Portion']}) is used per portion?\n> ")
-                                      for i in indices}
-                item = {key: sum(float(rows[i][key])*amount_per_portion[i]
-                                 for i in indices)
-                        for key in rows[0].keys()
-                        if is_ok(key)}
-                item["Portion"] = input("What's the portion for this food?\n> ")
-                item["Name"] = food_name
-                writer = csv.DictWriter(foodsfile, rows[0].keys())
-                writer.writerow(item)
-                logger.info(f"wrote \"{food_name}\" to csv file successfully.")
+        try:
+            if args.add:
+                add_from_foods_to_today_file(foodsfile)
+            if food_name:=args.compose:
+                compose_foods_write_to_csv(food_name, foodsfile)
+        except KeyboardInterrupt:
+            print()
+            logger.info("interrupt. quitting...")
+            exit(1)
+
+def compose_foods_write_to_csv(food_name, foodsfile):
+    import csv
+    rows = list(csv.DictReader(foodsfile))
+    to_str = lambda i, item: f"{i}. {item['Name']} ({item['Portion']})\n"
+    if indices:=iterator_fzf_select(rows, fzf_process(['--multi', "--prompt", f"Select foods to compose into \"{food_name}\"> "]), to_str=to_str):
+        def is_ok(key):
+            try:
+                float(rows[0][key])
+                return True
+            except ValueError:
+                return False
+        amount_per_portion = {i: get_amount_from_stdin(rows[i], prompt=f"How much {rows[i]['Name']} ({rows[i]['Portion']}) is used per portion?")
+                              for i in indices}
+        item = {key: sum(float(rows[i][key])*amount_per_portion[i]
+                         for i in indices)
+                for key in rows[0].keys()
+                if is_ok(key)}
+        item["Portion"] = input("What's the portion for this food?\n> ")
+        item["Name"] = food_name
+        writer = csv.DictWriter(foodsfile, rows[0].keys())
+        writer.writerow(item)
+        logger.info(f"wrote \"{food_name}\" to csv file successfully.")
 
 
 def add_from_foods_to_today_file(foodsfile):
@@ -49,13 +57,14 @@ def add_from_foods_to_today_file(foodsfile):
                 logger.info(f"wrote to file {path}")
 
 
-def get_amount_from_stdin(item, prompt = None ):
+def get_amount_from_stdin(item, prompt=None):
     if prompt is None:
-        prompot = f"How much of \"{item['Name']} ({item['Portion']})\" you consumed (float)?"
+        prompt = f"How much of \"{item['Name']} ({item['Portion']})\" you consumed (float)?"
     print(prompt, end="\n> ")
     while True:
         try:
-            return float(input())
+            s = input()
+            return float(s)
         except ValueError:
             print(end="> ")
 
@@ -82,7 +91,7 @@ def search_food_write_csv(query, foodsfile):
     for name, url in prompt_url_fzf(query):
         portions, select = get_portions_element(url)
         for portion in select_portions_fzf(portions, select, prompt=f"{name}> "):
-            logger.info(f"reading keys for \"{name}\" ({portion}) ...")
+            logger.info(f"reading data of \"{name}\" ({portion}) ...")
             row = {key: value for key, value, _ in take(len(keys), get_keys(keys, units))}
             row["Name"] = name
             row["Portion"] = portion
