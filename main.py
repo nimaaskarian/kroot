@@ -1,5 +1,3 @@
-
-
 def main():
     from argparse import ArgumentParser, FileType
     parser = ArgumentParser(prog='havij', description='a script for you to gather data about food you eat')
@@ -25,9 +23,8 @@ def main():
             writer = csv.writer(args.foodsfile)
             csv_dict_reader = csv.DictReader(args.foodsfile)
             portions, select = get_portions_element(url)
-            portions = list(portions)
             if len(portions) > 1:
-                portion = set_portion_fzf(portions, select)
+                portion = select_portion_fzf(portions, select)
             else:
                 portion = portions[0]
             row = {key: value for key, value, _ in take(len(keys), get_keys(keys, units))}
@@ -42,23 +39,23 @@ def main():
             writer.writerow(row)
             args.foodsfile.close()
 
-def set_portion_fzf(portions, select):
+def select_portion_fzf(portions, select):
     if i:=iterator_fzf_select(portions):
         select.select_by_visible_text(portions[i])
         return portions[i]
+    return portions[0]
 
 def get_portions_element(url):
     from selenium.webdriver.support import expected_conditions as EC
     from selenium.webdriver.support.wait import WebDriverWait
     from selenium.webdriver.common.by import By
     from selenium.webdriver.support.select import Select
+    from operator import attrgetter
     driver.get(url)
     selector = By.ID, "nutrient-per-selection-Survey-or-branded"
     element = WebDriverWait(driver, 2).until(EC.presence_of_element_located(selector))
     select = Select(element)
-    return (item.text for item in select.options), select
-    # for item in select.options: yield item.text
-
+    return list(map(attrgetter("text"), select.options)), select
 
 def get_keys(keys, units={}):
     from selenium.webdriver.support import expected_conditions as EC
