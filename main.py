@@ -37,9 +37,6 @@ def compare_foods_matplot(foodsfile):
                     except ValueError as e:
                         continue
 
-
-
-
 def compose_foods_write_to_csv(food_name, foodsfile):
     import csv
     rows = list(csv.DictReader(foodsfile))
@@ -270,7 +267,7 @@ if __name__ == "__main__":
 
     parser = ArgumentParser(prog='kroot', description='(pronounced carrot) a script for you to gather data about food you eat')
     parser.add_argument('--search', type=str, help="search food in the USDA's database")
-    parser.add_argument('--add', help="interactively add nom nom-ed food", action="store_true")
+    parser.add_argument('--add', help="interactively add nom nom-ed food", action="store_true", default=True)
     parser.add_argument('--foodsfile', type=FileType("r+"), default=str(Path.home().joinpath(".config/kroot/foods.csv")))
     parser.add_argument('--atedir', type=Path, default=Path.home().joinpath(".config/kroot/ate/"))
     parser.add_argument('--compose', help="are you beethoven? cuz your composed food's so delicious.")
