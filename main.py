@@ -40,39 +40,36 @@ def search_food_write_csv(query, foodsfile):
     units = {
             "Energy": "kcal"
             }
-    if (name_url := prompt_url_fzf(query)):
-        name, url = name_url
-        writer = csv.writer(foodsfile)
+    reader = csv.reader(foodsfile)
+    name_portions = [(name, portion) for name, portion, *_ in reader]
+    writer = csv.DictWriter(foodsfile, ["Name", "Portion"]+keys, lineterminator="\n")
+    if not any(name_portions):
+        writer.writeheader()
+    for name, url in prompt_url_fzf(query):
         portions, select = get_portions_element(url)
-        if len(portions) > 1:
-            portion = select_portion_fzf(portions, select)
-        else:
-            portion = portions[0]
-            logger.info(f"only one portion ({portion}) was present.")
-        logger.info("reading keys from the selected food...")
-        row = {key: value for key, value, _ in take(len(keys), get_keys(keys, units))}
-        row["Name"] = name
-        row["Portion"] = portion
-        for key in keys:
-            if not (item:=row.get(key,0)):
-                row[key] = item
-        writer = csv.DictWriter(foodsfile, ["Name", "Portion"]+keys, lineterminator="\n")
-        reader = csv.reader(foodsfile)
-        name_portions = [(name, portion) for name, portion, *_ in reader]
-        if not any(name_portions):
-            writer.writeheader()
-        if (name, portion) not in name_portions:
-            writer.writerow(row)
-            logger.info(f"wrote \"{name}\" to csv file successfully.")
-        else:
-            logger.info("name and portion present. Didn't write the new one.")
+        for portion in select_portions_fzf(portions, select, prompt=f"{name}> "):
+            logger.info(f"reading keys for \"{name}\" ({portion}) ...")
+            row = {key: value for key, value, _ in take(len(keys), get_keys(keys, units))}
+            row["Name"] = name
+            row["Portion"] = portion
+            for key in keys:
+                if not (item:=row.get(key,0)):
+                    row[key] = item
+            if (name, portion) not in name_portions:
+                writer.writerow(row)
+                logger.info(f"wrote \"{name}\" to csv file successfully.")
+            else:
+                logger.info("name and portion present. didn't write the new one.")
 
-def select_portion_fzf(portions, select):
-    if indices:=iterator_fzf_select(portions, fzf_process()):
-        i = indices[0]
-        select.select_by_visible_text(portions[i])
-        return portions[i]
-    return portions[0]
+def select_portions_fzf(portions, select, prompt):
+    if len(portions) > 1:
+        if indices:=iterator_fzf_select(portions, fzf_process(["--multi", "--prompt", prompt])):
+            for i in indices:
+                select.select_by_visible_text(portions[i])
+                yield portions[i]
+    else:
+        logger.info(f"only one portion ({portions[0]}) was present.")
+        yield portions[0]
 
 def get_portions_element(url):
     from selenium.webdriver.support import expected_conditions as EC
@@ -90,7 +87,7 @@ def get_keys(keys, units={}):
     from selenium.webdriver.support import expected_conditions as EC
     from selenium.webdriver.support.wait import WebDriverWait
     from selenium.webdriver.common.by import By
-    WebDriverWait(driver, 5).until(EC.invisibility_of_element((By.ID, "floatingCirclesG")))
+    WebDriverWait(driver, 10).until(EC.invisibility_of_element((By.ID, "floatingCirclesG")))
     selector = By.CSS_SELECTOR, "app-food-nutrients>div>div>table>tbody>tr"
     WebDriverWait(driver, 2).until(EC.presence_of_element_located(selector))
     for item in driver.find_elements(*selector):
@@ -109,21 +106,23 @@ def prompt_url_fzf(query):
     from selenium.common.exceptions import TimeoutException
     to_str = lambda i, name_url_cat: f"{i}. \"{name_url_cat[0]}\" in \"{name_url_cat[2]}\"\n"
     name_urls = []
+    all_indices=[]
     callback = lambda _, name_url: name_urls.append((name_url[0], name_url[1]))
     process = fzf_process()
-    for type in ("Foundation","SR Legacy"):
-        try:
-            if indices:=iterator_fzf_select(search(query, type), process, callback, to_str):
-                i = indices[0]
-                return name_urls[i]
-        except TimeoutException:
-            pass
+    def search_all_types(query):
+        for type in ("Foundation","SR Legacy"):
+            try:
+                yield from search(query, type)
+            except TimeoutException:
+                pass
+    if indices:=iterator_fzf_select(search_all_types(query), process, callback, to_str):
+        all_indices+=indices
+
     process.terminate()
     process.wait()
-    logger.error("No results.")
-    exit(1)
+    return [name_urls[i] for i in all_indices]
 
-def fzf_process(args=[]):
+def fzf_process(args=["--multi"]):
     import subprocess
     return subprocess.Popen(
             ["fzf"]+args,
