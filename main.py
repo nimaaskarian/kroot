@@ -1,34 +1,36 @@
 #!/usr/bin/env python3
 
-
 def main(args):
-    with args.foodsfile as file:
+    with args.foodsfile as foodsfile:
         if query:=args.search:
-            search_food_write_csv(query, file)
+            search_food_write_csv(query, foodsfile)
         if args.add:
-            import csv
-            rows = list(csv.DictReader(file))
-            to_str = lambda i, item: f"{i}. {item['Name']} ({item['Portion']})\n"
-            if indices:=iterator_fzf_select(rows, fzf_process(['--multi']), to_str=to_str):
-                time = datetime.today()
-                path = args.atedir.joinpath(time.strftime("%F.csv"))
-                with open(path, "r+") as atefile:
-                    writer = csv.DictWriter(atefile, list(rows[0].keys())+["Time", "Amount"])
-                    if not atefile.read():
-                        writer.writeheader()
-                    for i in indices:
-                        item = rows[i]
-                        item["Time"] = time.strftime("%T")
-                        print(f"How much of \"{item['Name']} ({item['Portion']})\" you consumed (float)?", end="\n> ")
-                        while True:
-                            try:
-                                amount = float(input())
-                                break
-                            except ValueError:
-                                print(end="> ")
-                        item["Amount"] = amount
-                        writer.writerow(item)
-                        logger.info(f"wrote to file {path}")
+            add_from_foods_to_today_file(foodsfile)
+
+def add_from_foods_to_today_file(foodsfile):
+    import csv
+    rows = list(csv.DictReader(foodsfile))
+    to_str = lambda i, item: f"{i}. {item['Name']} ({item['Portion']})\n"
+    if indices:=iterator_fzf_select(rows, fzf_process(['--multi']), to_str=to_str):
+        time = datetime.today()
+        path = args.atedir.joinpath(time.strftime("%F.csv"))
+        with open(path, "r+") as atefile:
+            writer = csv.DictWriter(atefile, list(rows[0].keys())+["Time", "Amount"])
+            if not atefile.read():
+                writer.writeheader()
+            for i in indices:
+                item = rows[i]
+                item["Time"] = time.strftime("%T")
+                print(f"How much of \"{item['Name']} ({item['Portion']})\" you consumed (float)?", end="\n> ")
+                while True:
+                    try:
+                        amount = float(input())
+                        break
+                    except ValueError:
+                        print(end="> ")
+                item["Amount"] = amount
+                writer.writerow(item)
+                logger.info(f"wrote to file {path}")
 
 def search_food_write_csv(query, foodsfile):
     from selenium.webdriver.chrome.service import Service
@@ -209,5 +211,6 @@ if __name__ == "__main__":
     parser.add_argument('--add', help="interactively add nom nom-ed food", action="store_true")
     parser.add_argument('--foodsfile', type=FileType("r+"), default=str(Path.home().joinpath(".config/kroot/foods.csv")))
     parser.add_argument('--atedir', type=Path, default=Path.home().joinpath(".config/kroot/ate/"))
+    parser.add_argument('--compose', help="are you beethoven? cuz your composed food's so delicious.", action="store_true")
     args = parser.parse_args()
     main(args)
