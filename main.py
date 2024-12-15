@@ -5,39 +5,47 @@ def main():
     parser.add_argument('--foodsfile', type=FileType("r+"), default="/home/nima/.config/havij/foods.csv")
     args = parser.parse_args()
     if query:=args.search:
-        from selenium.webdriver.chrome.service import Service
-        from selenium.webdriver import ChromeOptions, Chrome
-        from more_itertools import take
-        import csv
-        global driver
-        options = ChromeOptions()
-        service = Service("/sbin/chromedriver")
-        options.add_argument("--headless=new")
-        driver = Chrome(options=options, service=service)
-        keys = [ "Energy", "Protein", "Carbohydrate", "Sugar" ]
-        units = {
-                "Energy": "kcal"
-                }
-        if (name_url := prompt_url_fzf(query)):
-            name, url = name_url
-            writer = csv.writer(args.foodsfile)
-            csv_dict_reader = csv.DictReader(args.foodsfile)
-            portions, select = get_portions_element(url)
-            if len(portions) > 1:
-                portion = select_portion_fzf(portions, select)
-            else:
-                portion = portions[0]
-            row = {key: value for key, value, _ in take(len(keys), get_keys(keys, units))}
-            row["Name"] = name
-            row["Portion"] = portion
-            for key in keys:
-                if not (item:=row.get(key,0)):
-                    row[key] = item
-            writer = csv.DictWriter(args.foodsfile, ["Name", "Portion"]+keys, lineterminator="\n")
-            if not any(csv_dict_reader):
-                writer.writeheader()
+        search_food_write_csv(query, args.foodsfile)
+
+def search_food_write_csv(query, foodsfile):
+    from selenium.webdriver.chrome.service import Service
+    from selenium.webdriver import ChromeOptions, Chrome
+    from more_itertools import take
+    import csv
+    global driver
+    options = ChromeOptions()
+    service = Service("/sbin/chromedriver")
+    options.add_argument("--headless=new")
+    driver = Chrome(options=options, service=service)
+    keys = [ "Energy", "Protein", "Carbohydrate", "Sugar" ]
+    units = {
+            "Energy": "kcal"
+            }
+    if (name_url := prompt_url_fzf(query)):
+        name, url = name_url
+        writer = csv.writer(foodsfile)
+        portions, select = get_portions_element(url)
+        if len(portions) > 1:
+            portion = select_portion_fzf(portions, select)
+        else:
+            portion = portions[0]
+            print(f"INFO: only one portion ({portion}) was present.")
+        row = {key: value for key, value, _ in take(len(keys), get_keys(keys, units))}
+        row["Name"] = name
+        row["Portion"] = portion
+        for key in keys:
+            if not (item:=row.get(key,0)):
+                row[key] = item
+        writer = csv.DictWriter(foodsfile, ["Name", "Portion"]+keys, lineterminator="\n")
+        reader = csv.reader(foodsfile)
+        name_portions = [(name, portion) for name, portion, *_ in reader]
+        if not any(name_portions):
+            writer.writeheader()
+        if (name, portion) not in name_portions:
             writer.writerow(row)
-            args.foodsfile.close()
+        else:
+            print("INFO: name and portion present. Didn't write the new one.")
+        foodsfile.close()
 
 def select_portion_fzf(portions, select):
     if i:=iterator_fzf_select(portions):
@@ -77,21 +85,30 @@ def get_keys(keys, units={}):
             yield key, float(value), unit
 
 def prompt_url_fzf(query):
+    from selenium.common.exceptions import TimeoutException
     to_str = lambda i, name_url_cat: f"{i}. \"{name_url_cat[0]}\" in \"{name_url_cat[2]}\"\n"
     name_urls = []
     callback = lambda _, name_url: name_urls.append((name_url[0], name_url[1]))
-    if i:=iterator_fzf_select(search(query), callback, to_str):
-        return name_urls[i]
+    process = fzf_process()
+    try:
+        if i:=iterator_fzf_select(search(query), callback, to_str, process):
+            return name_urls[i]
+    except TimeoutException:
+        process.kill()
+        if i:=iterator_fzf_select(search(query, "SR%20Legacy"), callback, to_str):
+            return name_urls[i]
 
-def iterator_fzf_select(iterator, callback=None, to_str=lambda i, item: f"{i}. {item}\n"):
+def fzf_process(args=[]):
     import subprocess
-    process = subprocess.Popen(
-            "fzf",
+    return subprocess.Popen(
+            ["fzf"]+args,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True
         )
+
+def iterator_fzf_select(iterator, callback=None, to_str=lambda i, item: f"{i}. {item}\n",process=fzf_process()):
     if process.stdin is None or process.stdout is None:
         return
     try:
@@ -108,13 +125,13 @@ def iterator_fzf_select(iterator, callback=None, to_str=lambda i, item: f"{i}. {
     if output:=process.stdout.read():
         return int(output[:output.index(".")])
 
-def search(query):
+def search(query, type="Foundation"):
     from selenium.webdriver.support import expected_conditions as EC
     from selenium.webdriver.support.wait import WebDriverWait
     from selenium.webdriver.common.by import By
     from selenium.webdriver import ActionChains
     from selenium.common.exceptions import StaleElementReferenceException
-    driver.get(f"https://fdc.nal.usda.gov/food-search?type=Foundation&query={query}")
+    driver.get(f"https://fdc.nal.usda.gov/food-search?type={type}&query={query}")
     selector = By.CSS_SELECTOR, "app-food-search>div>div>div>div>table>tbody>tr"
     WebDriverWait(driver, 2).until(EC.presence_of_element_located(selector))
     elements = driver.find_elements(*selector)
@@ -125,10 +142,12 @@ def search(query):
         try:
             try:
                 _, url_name, _, category, *_ = element.find_elements(By.XPATH,".//td")
+                url = url_name.find_element(By.CSS_SELECTOR,"a").get_attribute("href")
+                yield url_name.text, url, category.text
             except ValueError:
-                continue
-            url = url_name.find_element(By.CSS_SELECTOR,"a").get_attribute("href")
-            yield url_name.text, url, category.text
+                _, url_name, category, *_ = element.find_elements(By.XPATH,".//td")
+                url = url_name.find_element(By.CSS_SELECTOR,"a").get_attribute("href")
+                yield url_name.text, url, category.text
             i+=1
         except StaleElementReferenceException:
             elements = driver.find_elements(*selector)
