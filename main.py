@@ -1,8 +1,4 @@
 #!/usr/bin/env python3
-import logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("kroot")
-
 def main(args):
     with args.foodsfile as file:
         if query:=args.search:
@@ -12,19 +8,26 @@ def main(args):
             rows = list(csv.DictReader(file))
             to_str = lambda i, item: f"{i}. {item['Name']} ({item['Portion']})\n"
             if indices:=iterator_fzf_select(rows, fzf_process(['--multi']), to_str=to_str):
-                for i in indices:
-                    item = rows[i]
-                    print(f"How much of \"{item['Name']} ({item['Portion']})\" you consumed (float)?", end="\n> ")
-                    while True:
-                        try:
-                            amount = float(input())
-                            break
-                        except ValueError:
-                            print(end="> ")
-                from datetime import datetime
-                date = datetime.today()
-                today_filename = date.strftime("%F.txt")
-                print(args.atedir.joinpath(today_filename))
+                time = datetime.today()
+                path = args.atedir.joinpath(time.strftime("%F.csv"))
+                with open(path, "r+") as atefile:
+                    writer = csv.DictWriter(atefile, list(rows[0].keys())+["Time", "Amount"])
+                    if not atefile.read():
+                        writer.writeheader()
+                    for i in indices:
+                        item = rows[i]
+                        item["Time"] = time.strftime("%T")
+                        print(f"How much of \"{item['Name']} ({item['Portion']})\" you consumed (float)?", end="\n> ")
+                        while True:
+                            try:
+                                amount = float(input())
+                                break
+                            except ValueError:
+                                print(end="> ")
+                        item["Amount"] = amount
+                        print(item)
+                        writer.writerow(item)
+                print()
 
 def search_food_write_csv(query, foodsfile):
     from selenium.webdriver.chrome.service import Service
@@ -179,7 +182,12 @@ def search(query, type):
 
 if __name__ == "__main__":
     from argparse import ArgumentParser, FileType
+    from datetime import datetime
     from pathlib import Path
+    import logging
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger("kroot")
+
     parser = ArgumentParser(prog='kroot', description='(pronounced carrot) a script for you to gather data about food you eat')
     parser.add_argument('--search', type=str, help="search food in the USDA's database")
     parser.add_argument('--add', help="interactively add nom nom-ed food", action="store_true")
