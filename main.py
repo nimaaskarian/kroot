@@ -242,9 +242,8 @@ def search(query, type):
                 count = 50
         i = 0
         while i < len(elements):
-            element = elements[i]
-            ActionChains(driver).scroll_to_element(element).perform()
             try:
+                element = elements[i]
                 try:
                     _, url_name, _, category, *_ = element.find_elements(By.XPATH,".//td")
                     url = url_name.find_element(By.CSS_SELECTOR,"a").get_attribute("href")
