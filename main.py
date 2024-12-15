@@ -89,14 +89,16 @@ def prompt_url_fzf(query):
     to_str = lambda i, name_url_cat: f"{i}. \"{name_url_cat[0]}\" in \"{name_url_cat[2]}\"\n"
     name_urls = []
     callback = lambda _, name_url: name_urls.append((name_url[0], name_url[1]))
-    process = fzf_process()
-    try:
-        if i:=iterator_fzf_select(search(query), callback, to_str, process):
-            return name_urls[i]
-    except TimeoutException:
-        process.kill()
-        if i:=iterator_fzf_select(search(query, "SR%20Legacy"), callback, to_str):
-            return name_urls[i]
+    for type in ("Foundation","SR Legacy"):
+        process = fzf_process()
+        try:
+            if i:=iterator_fzf_select(search(query, type), callback, to_str, process):
+                return name_urls[i]
+        except TimeoutException:
+            process.kill()
+    from sys import stderr
+    print("ERROR: No results.", flush=True, file=stderr)
+    exit(1)
 
 def fzf_process(args=[]):
     import subprocess
@@ -125,7 +127,7 @@ def iterator_fzf_select(iterator, callback=None, to_str=lambda i, item: f"{i}. {
     if output:=process.stdout.read():
         return int(output[:output.index(".")])
 
-def search(query, type="Foundation"):
+def search(query, type):
     from selenium.webdriver.support import expected_conditions as EC
     from selenium.webdriver.support.wait import WebDriverWait
     from selenium.webdriver.common.by import By
