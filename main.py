@@ -3,11 +3,21 @@
 def main():
     from argparse import ArgumentParser, FileType
     parser = ArgumentParser(prog='kroot', description='(pronounced carrot) a script for you to gather data about food you eat')
-    parser.add_argument('--search', type=str)
+    parser.add_argument('--search', type=str, help="search food in the USDA's database")
+    parser.add_argument('--add', help="nom nom. food ate.", action="store_true")
     parser.add_argument('--foodsfile', type=FileType("r+"), default="/home/nima/.config/havij/foods.csv")
     args = parser.parse_args()
-    if query:=args.search:
-        search_food_write_csv(query, args.foodsfile)
+    with args.foodsfile as file:
+        if query:=args.search:
+            search_food_write_csv(query, file)
+        if args.add:
+            import csv
+            rows = list(csv.DictReader(file))
+            to_str = lambda i, item: f"{i}. {item['Name']} ({item['Portion']})\n"
+            if indices:=iterator_fzf_select(rows, fzf_process(['--multi']), to_str=to_str):
+                for i in indices:
+                    item = rows[i]
+                    input(f"How much of \"{item['Name']} ({item['Portion']})\" you consumed (float)?\n> ")
 
 def search_food_write_csv(query, foodsfile):
     from selenium.webdriver.chrome.service import Service
@@ -19,7 +29,7 @@ def search_food_write_csv(query, foodsfile):
     service = Service("/sbin/chromedriver")
     options.add_argument("--headless=new")
     driver = Chrome(options=options, service=service)
-    keys = [ "Energy", "Protein", "Carbohydrate", "Sugar" ]
+    keys = [ "Energy", "Protein", "Carbohydrate", "Sugar", "Cholesterol" ]
     units = {
             "Energy": "kcal"
             }
@@ -47,10 +57,10 @@ def search_food_write_csv(query, foodsfile):
             writer.writerow(row)
         else:
             print("INFO: name and portion present. Didn't write the new one.")
-        foodsfile.close()
 
 def select_portion_fzf(portions, select):
-    if i:=iterator_fzf_select(portions, fzf_process()):
+    if indices:=iterator_fzf_select(portions, fzf_process()):
+        i = indices[0]
         select.select_by_visible_text(portions[i])
         return portions[i]
     return portions[0]
@@ -65,7 +75,7 @@ def get_portions_element(url):
     selector = By.ID, "nutrient-per-selection-Survey-or-branded"
     element = WebDriverWait(driver, 2).until(EC.presence_of_element_located(selector))
     select = Select(element)
-    return list(map(attrgetter("text"), select.options)), select
+    return tuple(map(attrgetter("text"), select.options)), select
 
 def get_keys(keys, units={}):
     from selenium.webdriver.support import expected_conditions as EC
@@ -94,7 +104,8 @@ def prompt_url_fzf(query):
     for type in ("Foundation","SR Legacy"):
         process = fzf_process()
         try:
-            if i:=iterator_fzf_select(search(query, type), process, callback, to_str):
+            if indices:=iterator_fzf_select(search(query, type), process, callback, to_str):
+                i = indices[0]
                 return name_urls[i]
         except TimeoutException:
             process.kill()
@@ -126,8 +137,9 @@ def iterator_fzf_select(iterator,process, callback=None, to_str=lambda i, item: 
         process.stdin.close()
     except BrokenPipeError:
         pass
-    if output:=process.stdout.read():
-        return int(output[:output.index(".")])
+    if output:=process.stdout.readlines():
+        return [int(line[:line.index(".")]) for line in output]
+
 
 def search(query, type):
     from selenium.webdriver.support import expected_conditions as EC
