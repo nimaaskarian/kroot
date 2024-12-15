@@ -1,12 +1,9 @@
+#!/usr/bin/env python3
+import logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("kroot")
 
-
-def main():
-    from argparse import ArgumentParser, FileType
-    parser = ArgumentParser(prog='kroot', description='(pronounced carrot) a script for you to gather data about food you eat')
-    parser.add_argument('--search', type=str, help="search food in the USDA's database")
-    parser.add_argument('--add', help="nom nom. food ate.", action="store_true")
-    parser.add_argument('--foodsfile', type=FileType("r+"), default="/home/nima/.config/havij/foods.csv")
-    args = parser.parse_args()
+def main(args):
     with args.foodsfile as file:
         if query:=args.search:
             search_food_write_csv(query, file)
@@ -17,7 +14,17 @@ def main():
             if indices:=iterator_fzf_select(rows, fzf_process(['--multi']), to_str=to_str):
                 for i in indices:
                     item = rows[i]
-                    input(f"How much of \"{item['Name']} ({item['Portion']})\" you consumed (float)?\n> ")
+                    print(f"How much of \"{item['Name']} ({item['Portion']})\" you consumed (float)?", end="\n> ")
+                    while True:
+                        try:
+                            amount = float(input())
+                            break
+                        except ValueError:
+                            print(end="> ")
+                from datetime import datetime
+                date = datetime.today()
+                today_filename = date.strftime("%F.txt")
+                print(args.atedir.joinpath(today_filename))
 
 def search_food_write_csv(query, foodsfile):
     from selenium.webdriver.chrome.service import Service
@@ -29,7 +36,7 @@ def search_food_write_csv(query, foodsfile):
     service = Service("/sbin/chromedriver")
     options.add_argument("--headless=new")
     driver = Chrome(options=options, service=service)
-    keys = [ "Energy", "Protein", "Carbohydrate", "Sugar", "Cholesterol" ]
+    keys = [ "Energy", "Protein", "Carbohydrate", "Sugar", "Cholesterol", "Fat", "Caffeine" ]
     units = {
             "Energy": "kcal"
             }
@@ -41,7 +48,8 @@ def search_food_write_csv(query, foodsfile):
             portion = select_portion_fzf(portions, select)
         else:
             portion = portions[0]
-            print(f"INFO: only one portion ({portion}) was present.")
+            logger.info(f"only one portion ({portion}) was present.")
+        logger.info("reading keys from the selected food...")
         row = {key: value for key, value, _ in take(len(keys), get_keys(keys, units))}
         row["Name"] = name
         row["Portion"] = portion
@@ -55,8 +63,9 @@ def search_food_write_csv(query, foodsfile):
             writer.writeheader()
         if (name, portion) not in name_portions:
             writer.writerow(row)
+            logger.info(f"wrote \"{name}\" to csv file successfully.")
         else:
-            print("INFO: name and portion present. Didn't write the new one.")
+            logger.info("name and portion present. Didn't write the new one.")
 
 def select_portion_fzf(portions, select):
     if indices:=iterator_fzf_select(portions, fzf_process()):
@@ -101,16 +110,16 @@ def prompt_url_fzf(query):
     to_str = lambda i, name_url_cat: f"{i}. \"{name_url_cat[0]}\" in \"{name_url_cat[2]}\"\n"
     name_urls = []
     callback = lambda _, name_url: name_urls.append((name_url[0], name_url[1]))
+    process = fzf_process()
     for type in ("Foundation","SR Legacy"):
-        process = fzf_process()
         try:
             if indices:=iterator_fzf_select(search(query, type), process, callback, to_str):
                 i = indices[0]
                 return name_urls[i]
         except TimeoutException:
-            process.kill()
-    from sys import stderr
-    print("ERROR: No results.", flush=True, file=stderr)
+            pass
+    process.kill()
+    logger.error("No results.")
     exit(1)
 
 def fzf_process(args=[]):
@@ -169,4 +178,12 @@ def search(query, type):
             elements = driver.find_elements(*selector)
 
 if __name__ == "__main__":
-    main()
+    from argparse import ArgumentParser, FileType
+    from pathlib import Path
+    parser = ArgumentParser(prog='kroot', description='(pronounced carrot) a script for you to gather data about food you eat')
+    parser.add_argument('--search', type=str, help="search food in the USDA's database")
+    parser.add_argument('--add', help="interactively add nom nom-ed food", action="store_true")
+    parser.add_argument('--foodsfile', type=FileType("r+"), default="/home/nima/.config/havij/foods.csv")
+    parser.add_argument('--atedir', type=Path, default="/home/nima/.config/havij/ate/")
+    args = parser.parse_args()
+    main(args)
