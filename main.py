@@ -9,10 +9,36 @@ def main(args):
                 add_from_foods_to_today_file(foodsfile)
             if food_name:=args.compose:
                 compose_foods_write_to_csv(food_name, foodsfile)
+            if args.compare:
+                compare_foods_matplot(foodsfile)
         except KeyboardInterrupt:
             print()
             logger.info("interrupt. quitting...")
             exit(1)
+
+def compare_foods_matplot(foodsfile):
+    import csv
+    rows = list(csv.DictReader(foodsfile))
+    to_str = lambda i, item: f"{i}. {item['Name']} ({item['Portion']})\n"
+    if indices:=iterator_fzf_select(rows, fzf_process(['--multi', "--prompt", f"Select foods to compare> "]), to_str=to_str):
+        selected = {i:rows[i] for i in indices}
+        imax, max_calorie = max(selected.items(), key=lambda ix: float(ix[1]["Energy"]))
+        key_max = len(max(max_calorie, key=len))
+        pad_max = len(max_calorie["Name"])
+        for i, row in selected.items():
+            if i != imax:
+                print(" "*(key_max+1), max_calorie["Name"],"   ", row["Name"])
+                coefficient = float(max_calorie["Energy"])/float(row["Energy"])
+                print(f"{(key_max-8)*" "} Serving: {"1".ljust(pad_max+5," ")}{coefficient:.3f}")
+                for key, item in row.items():
+                    try:
+                        item = float(item)*coefficient
+                        print(f"{key.rjust(key_max)}: {"{:.3f}".format(float(max_calorie[key])).ljust(pad_max+5, " ")}{item:.3f}")
+                    except ValueError as e:
+                        continue
+
+
+
 
 def compose_foods_write_to_csv(food_name, foodsfile):
     import csv
@@ -36,7 +62,6 @@ def compose_foods_write_to_csv(food_name, foodsfile):
         writer = csv.DictWriter(foodsfile, rows[0].keys())
         writer.writerow(item)
         logger.info(f"wrote \"{food_name}\" to csv file successfully.")
-
 
 def add_from_foods_to_today_file(foodsfile):
     import csv
@@ -249,5 +274,6 @@ if __name__ == "__main__":
     parser.add_argument('--foodsfile', type=FileType("r+"), default=str(Path.home().joinpath(".config/kroot/foods.csv")))
     parser.add_argument('--atedir', type=Path, default=Path.home().joinpath(".config/kroot/ate/"))
     parser.add_argument('--compose', help="are you beethoven? cuz your composed food's so delicious.")
+    parser.add_argument('--compare', help="compare foods together", action="store_true")
     args = parser.parse_args()
     main(args)
