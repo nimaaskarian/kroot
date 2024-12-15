@@ -118,7 +118,8 @@ def prompt_url_fzf(query):
                 return name_urls[i]
         except TimeoutException:
             pass
-    process.kill()
+    process.terminate()
+    process.wait()
     logger.error("No results.")
     exit(1)
 
