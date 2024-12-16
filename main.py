@@ -96,7 +96,6 @@ def get_amount_from_stdin(item, prompt=None):
 
 
 def search_food_write_csv(query, foodsfile):
-    from more_itertools import take
     import csv
     keys = [ "Energy", "Protein", "Carbohydrate", "Sugar", "Cholesterol", "Fat", "Caffeine" ]
     units = {
@@ -141,7 +140,7 @@ def get_portions_element(url):
     from operator import attrgetter
     driver.get(url)
     selector = By.ID, "nutrient-per-selection-Survey-or-branded"
-    element = WebDriverWait(driver, 2).until(EC.presence_of_element_located(selector))
+    element = WebDriverWait(driver, 5).until(EC.presence_of_element_located(selector))
     select = Select(element)
     return tuple(map(attrgetter("text"), select.options)), select
 
@@ -150,19 +149,26 @@ def get_keys(keys, units={}):
     from selenium.webdriver.support.wait import WebDriverWait
     from selenium.webdriver.common.by import By
     WebDriverWait(driver, 10).until(EC.invisibility_of_element((By.ID, "floatingCirclesG")))
-    selector = By.CSS_SELECTOR, "app-food-nutrients>div>div>table>tbody>tr"
+    selector = By.CSS_SELECTOR, "app-food-nutrients>div>div>table>tbody>tr:nth-child(-n+10)"
     WebDriverWait(driver, 2).until(EC.presence_of_element_located(selector))
     for item in driver.find_elements(*selector):
         try:
-            name, value, unit, *_ = map(lambda x: x.text.strip(), item.find_elements(By.XPATH,".//td"))
+            name, value, unit = take(3, map(lambda x: x.text.strip(), item.find_elements(By.XPATH,".//td")))
         except ValueError:
             continue
         try:
             unit_ok = units[name] == unit
         except KeyError:
             unit_ok = True
-        if unit_ok and (key:=next((key for key in keys if key in name), None)) is not None:
-            yield key, float(value), unit
+        if unit_ok and (key:=next((key for key in keys if key in name or key.lower() in name), None)) is not None:
+            try:
+                yield key, float(value), unit
+            except ValueError:
+                continue
+            try:
+                yield key, float(value[1:]), unit
+            except ValueError:
+                continue
 
 def prompt_url_fzf(query):
     from selenium.common.exceptions import TimeoutException
@@ -216,7 +222,6 @@ def search(query, type):
     from selenium.webdriver.support import expected_conditions as EC
     from selenium.webdriver.support.wait import WebDriverWait
     from selenium.webdriver.common.by import By
-    from selenium.webdriver import ActionChains
     from selenium.common.exceptions import StaleElementReferenceException
     import time
     logger.debug("getting")
@@ -281,6 +286,10 @@ def firefox_driver(args):
     else:
         options.add_argument("-headless")
     driver = Firefox(options=options)
+
+def take(n, iterable):
+    from itertools import islice
+    return list(islice(iterable, n))
 
 if __name__ == "__main__":
     from argparse import ArgumentParser, FileType
