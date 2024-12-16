@@ -3,6 +3,10 @@
 def main(args):
     with args.foodsfile as foodsfile:
         if query:=args.search:
+            if args.firefox:
+                firefox_driver(args.browser_args)
+            else:
+                chrome_driver(args.browser_args)
             search_food_write_csv(query, foodsfile)
         try:
             if args.add:
@@ -92,15 +96,8 @@ def get_amount_from_stdin(item, prompt=None):
 
 
 def search_food_write_csv(query, foodsfile):
-    from selenium.webdriver.chrome.service import Service
-    from selenium.webdriver import ChromeOptions, Chrome
     from more_itertools import take
     import csv
-    global driver
-    options = ChromeOptions()
-    service = Service("/sbin/chromedriver")
-    options.add_argument("--headless=new")
-    driver = Chrome(options=options, service=service)
     keys = [ "Energy", "Protein", "Carbohydrate", "Sugar", "Cholesterol", "Fat", "Caffeine" ]
     units = {
             "Energy": "kcal"
@@ -222,12 +219,15 @@ def search(query, type):
     from selenium.webdriver import ActionChains
     from selenium.common.exceptions import StaleElementReferenceException
     import time
+    logger.debug("getting")
     driver.get(f"https://fdc.nal.usda.gov/food-search?type={type}&query={query}")
     selector = By.CSS_SELECTOR, "app-food-search>div>div>div>div>table>tbody>tr"
+    logger.debug("waiting")
     WebDriverWait(driver, 2).until(EC.presence_of_element_located(selector))
     elements = None
     count = 0
 
+    logger.debug("whiling")
     while count < 50:
         new_elements = driver.find_elements(*selector)
         if elements is None:
@@ -241,6 +241,7 @@ def search(query, type):
                 elements = new_elements
                 count = 50
         i = 0
+        logger.debug("inside whiling")
         while i < len(elements):
             try:
                 element = elements[i]
@@ -255,6 +256,31 @@ def search(query, type):
                 i+=1
             except StaleElementReferenceException:
                 elements = driver.find_elements(*selector)
+
+def chrome_driver(args):
+    from selenium.webdriver.chrome.service import Service
+    from selenium.webdriver import ChromeOptions, Chrome
+    global driver
+    options = ChromeOptions()
+    service = Service("/sbin/chromedriver")
+    if args:
+        for arg in args:
+            options.add_argument(arg)
+    else:
+        options.add_argument("--headless=new")
+
+    driver = Chrome(options=options, service=service)
+
+def firefox_driver(args):
+    from selenium.webdriver import FirefoxOptions, Firefox
+    global driver
+    options = FirefoxOptions()
+    if args:
+        for arg in args:
+            options.add_argument(arg)
+    else:
+        options.add_argument("-headless")
+    driver = Firefox(options=options)
 
 if __name__ == "__main__":
     from argparse import ArgumentParser, FileType
@@ -272,5 +298,7 @@ if __name__ == "__main__":
     parser.add_argument('--atedir', type=Path, default=Path.home().joinpath(".config/kroot/ate/"))
     parser.add_argument('--compose', help="are you beethoven? cuz your composed food's so delicious.")
     parser.add_argument('--compare', help="compare foods together", action="store_true")
+    parser.add_argument('--firefox', help="use foxy driver for scraping", action="store_true")
+    parser.add_argument('--browser-args', help="browser arguments (headless if non present)", action="append")
     args = parser.parse_args()
     main(args)
